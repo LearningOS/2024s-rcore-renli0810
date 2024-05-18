@@ -5,14 +5,13 @@ use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
 use crate::trap::{trap_handler, TrapContext};
-
+use crate::config::MAX_SYSCALL_NUM;
+use crate::timer::get_time_ms;
 /// The task control block (TCB) of a task.
 pub struct TaskControlBlock {
     /// Save task context
     pub task_cx: TaskContext,
 
-    /// Maintain the execution status of the current process
-    pub task_status: TaskStatus,
 
     /// Application address space
     pub memory_set: MemorySet,
@@ -28,6 +27,20 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Maintain the execution status of the current process
+    pub task_info:TaskInfo,
+}
+
+/// Task information
+#[derive(Copy, Clone)]
+pub struct TaskInfo {
+    /// Task status in it's life cycle
+    pub status: TaskStatus,
+    /// The numbers of syscall called by task
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+    /// Total running time of task
+    pub time: usize,
 }
 
 impl TaskControlBlock {
@@ -38,6 +51,11 @@ impl TaskControlBlock {
     /// get the user token
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
+    }
+
+    /// get the task info
+    pub fn get_task_info(&self) -> TaskInfo{
+        self.task_info
     }
     /// Based on the elf info in program, build the contents of task in a new address space
     pub fn new(elf_data: &[u8], app_id: usize) -> Self {
@@ -56,7 +74,7 @@ impl TaskControlBlock {
             MapPermission::R | MapPermission::W,
         );
         let task_control_block = Self {
-            task_status,
+            task_info:TaskInfo { status: (task_status), syscall_times: [0; MAX_SYSCALL_NUM], time: (get_time_ms()) },
             task_cx: TaskContext::goto_trap_return(kernel_stack_top),
             memory_set,
             trap_cx_ppn,

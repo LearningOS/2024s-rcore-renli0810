@@ -51,6 +51,15 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
+    /// check address conflicts
+    pub fn check_framed_area(&self,start_va:VirtAddr,end_va:VirtAddr)->isize{
+        for area in &self.areas{
+            if !(start_va.floor() >=area.vpn_range.get_end() || end_va.ceil() <=area.vpn_range.get_start()){
+                return -1;
+            }
+        }
+        0
+    }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,
@@ -62,6 +71,22 @@ impl MemorySet {
             MapArea::new(start_va, end_va, MapType::Framed, permission),
             None,
         );
+    }
+    /// remove framed_area
+    /// ref:https://sjodqtoogh.feishu.cn/docx/ZoqBdmcmAoXi9yxZUkucMmxBnzg 查看了具体思路
+    pub fn remove_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+    ) ->isize{
+        for (index,area) in self.areas.iter().enumerate(){
+            if end_va.ceil() <=area.vpn_range.get_end() && start_va.floor() >=area.vpn_range.get_start(){
+                self.areas[index].unmap(&mut self.page_table);
+                self.areas.remove(index);
+                return 0
+            }
+        }
+        -1
     }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
