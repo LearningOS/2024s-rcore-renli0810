@@ -15,6 +15,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
 
+/// MAX_SRC_NUM
+const MAX_SRC_NUM:usize = 10;
 /// Process Control Block
 pub struct ProcessControlBlock {
     /// immutable
@@ -49,6 +51,18 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+
+    pub enable:bool,
+    /// avail
+    pub avail:[u32; MAX_SRC_NUM],
+    /// allocation
+    pub allocation:[[u32; MAX_SRC_NUM];MAX_SRC_NUM],
+    /// need
+    pub need:[[u32; MAX_SRC_NUM];MAX_SRC_NUM],
+    /// work
+    pub work:[u32; MAX_SRC_NUM],
+    /// finish
+    pub finish:[bool;MAX_SRC_NUM],
 }
 
 impl ProcessControlBlockInner {
@@ -81,6 +95,56 @@ impl ProcessControlBlockInner {
     /// get a task with tid in this process
     pub fn get_task(&self, tid: usize) -> Arc<TaskControlBlock> {
         self.tasks[tid].as_ref().unwrap().clone()
+    }
+    /// get enable
+    pub fn get_enable(&self)->bool{
+        self.enable
+    }
+    /// change enable
+    pub fn change_enable(&mut self,enable:bool){
+        self.enable=enable;
+    }
+    /// add avail
+    pub fn add_avail(&mut self,id:usize,num:isize){
+        self.avail[id] = (self.avail[id] as isize + num)as u32;
+    }
+    pub fn change_need(&mut self,id:usize,src_id:usize,num:isize){
+        self.need[id][src_id] = ((self.need[id][src_id] as isize)+num) as u32;
+    }
+    pub fn change_allocation(&mut self,id:usize,src_id:usize,num:isize){
+        self.allocation[id][src_id] = ((self.allocation[id][src_id] as isize)+num) as u32;
+    }
+    pub fn detect_deadlock(&mut self)->isize{
+        self.work = self.avail.clone();
+        self.finish = [false;MAX_SRC_NUM];
+
+        loop{
+            let mut found = false; 
+            for i in 0 .. self.finish.len(){
+                if self.finish[i] == false{
+                    let work_change = self.work.iter().enumerate().any(|(src_id,&src)|{
+                        self.need[i][src_id]>src
+                    });
+                    if !work_change{
+                        self.finish[i]=true;
+                        found = true;
+                        self.work.iter_mut().enumerate().for_each(|(pos,ptr)|{
+                            *ptr+=self.allocation[i][pos];
+                        });
+                    }
+                }
+            }
+            if !found {
+                break;
+            }
+        }
+        for i in 0 .. self.finish.len(){
+            info!("finish = {}",self.finish[i]);
+            if self.finish[i]==false{
+                return -1;
+            }
+        }
+        0
     }
 }
 
@@ -119,6 +183,12 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    enable:false,
+                    avail:[0; MAX_SRC_NUM],
+                    allocation:[[0; MAX_SRC_NUM];MAX_SRC_NUM],
+                    need:[[0; MAX_SRC_NUM];MAX_SRC_NUM],
+                    work:[0; MAX_SRC_NUM],
+                    finish:[false; MAX_SRC_NUM],
                 })
             },
         });
@@ -245,6 +315,12 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    enable:false,
+                    avail:[0; MAX_SRC_NUM],
+                    allocation:[[0; MAX_SRC_NUM];MAX_SRC_NUM],
+                    need:[[0; MAX_SRC_NUM];MAX_SRC_NUM],
+                    work:[0; MAX_SRC_NUM],
+                    finish:[false; MAX_SRC_NUM],
                 })
             },
         });
