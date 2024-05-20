@@ -4,7 +4,7 @@
 //!
 //! `UPSafeCell<OSInodeInner>` -> `OSInode`: for static `ROOT_INODE`,we
 //! need to wrap `OSInodeInner` into `UPSafeCell`
-use super::File;
+use super::{File, StatMode};
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 use bitflags::*;
 use easy_fs::{EasyFileSystem, Inode};
 use lazy_static::*;
-
+use crate::fs::Stat;
 /// inode in memory
 /// A wrapper around a filesystem inode
 /// to implement File trait atop
@@ -25,8 +25,9 @@ pub struct OSInode {
 /// The OS inode inner in 'UPSafeCell'
 pub struct OSInodeInner {
     offset: usize,
-    inode: Arc<Inode>,
+    pub inode: Arc<Inode>,
 }
+
 
 impl OSInode {
     /// create a new inode in memory
@@ -123,7 +124,16 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         })
     }
 }
-
+/// linkat
+pub fn link(old_name:&str,new_name:&str){
+    ROOT_INODE.link(old_name, new_name);
+}
+/// unlink
+pub fn unlink(name:&str)->isize{
+    ROOT_INODE.unlink(name);
+    0
+}
+/// ref https://sjodqtoogh.feishu.cn/docx/ZoqBdmcmAoXi9yxZUkucMmxBnzg
 impl File for OSInode {
     fn readable(&self) -> bool {
         self.readable
@@ -154,5 +164,23 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+    fn stat(&self,_stat:&mut Stat)->isize{
+        let inner=self.inner.exclusive_access();
+        inner.inode.read_disk_inode(|disk_inode| {
+            if disk_inode.is_dir(){
+                _stat.mode = StatMode::DIR;
+            }
+            else if disk_inode.is_file(){
+                _stat.mode = StatMode::FILE;
+            }
+            else {
+                _stat.mode = StatMode::NULL;
+            }
+            _stat.nlink = disk_inode.link;
+            
+        });
+        _stat.ino = inner.inode.get_ino() as u64;
+        0
     }
 }

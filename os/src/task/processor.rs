@@ -11,7 +11,8 @@ use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
-
+use crate::mm::{VirtAddr,MapPermission};
+use crate::config::MAX_SYSCALL_NUM;
 /// Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
@@ -47,6 +48,7 @@ impl Processor {
 }
 
 lazy_static! {
+    /// processor memory
     pub static ref PROCESSOR: UPSafeCell<Processor> = unsafe { UPSafeCell::new(Processor::new()) };
 }
 
@@ -60,7 +62,7 @@ pub fn run_tasks() {
             // access coming task TCB exclusively
             let mut task_inner = task.inner_exclusive_access();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
-            task_inner.task_status = TaskStatus::Running;
+            task_inner.task_info.status = TaskStatus::Running;
             // release coming task_inner manually
             drop(task_inner);
             // release coming task TCB manually
@@ -91,7 +93,46 @@ pub fn current_user_token() -> usize {
     let task = current_task().unwrap();
     task.get_user_token()
 }
-
+/// Get the current task status
+pub fn get_task_status()->TaskStatus{
+    let task = current_task().unwrap();
+    task.get_current_status()
+}
+/// Get the current task time
+pub fn get_task_time()->usize{
+    let task = current_task().unwrap();
+    task.get_current_time()
+}
+/// Get the current task syscall times
+pub fn get_task_syscall_times()->[u32; MAX_SYSCALL_NUM]{
+    let task = current_task().unwrap();
+    task.get_current_syscall_times()
+}
+/// statistics the current task syscall
+pub fn statistics_current_syscall(id:usize){
+    let task = current_task().unwrap();
+    task.statistics_current_syscall(id);
+}
+/// statistics the current task syscall
+pub fn task_mmap(start_va:VirtAddr,end_va:VirtAddr,permission:MapPermission)->isize{
+    let task = current_task().unwrap();
+    task.mmap(start_va, end_va, permission)
+}
+/// statistics the current task syscall
+pub fn task_munmap(start_va:VirtAddr,end_va:VirtAddr)->isize{
+    let task = current_task().unwrap();
+    task.munmap(start_va, end_va)
+}
+/// change program brk
+pub fn change_program_brk(size: i32) -> Option<usize> {
+    let task = current_task().unwrap();
+    task.change_program_brk(size)
+}
+/// set priority
+pub fn set_priority(prio:i64)->isize{
+    let task = current_task().unwrap();
+    task.setpriority(prio)
+}
 ///Get the mutable reference to trap context of current task
 pub fn current_trap_cx() -> &'static mut TrapContext {
     current_task()
