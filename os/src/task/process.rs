@@ -16,7 +16,7 @@ use alloc::vec::Vec;
 use core::cell::RefMut;
 
 /// MAX_SRC_NUM
-const MAX_SRC_NUM:usize = 10;
+const MAX_SRC_NUM:usize = 7;
 /// Process Control Block
 pub struct ProcessControlBlock {
     /// immutable
@@ -107,29 +107,44 @@ impl ProcessControlBlockInner {
     /// add avail
     pub fn add_avail(&mut self,id:usize,num:isize){
         self.avail[id] = (self.avail[id] as isize + num)as u32;
+        info!("id = {} avail = {}",id,self.avail[id]);
     }
     pub fn change_need(&mut self,id:usize,src_id:usize,num:isize){
         self.need[id][src_id] = ((self.need[id][src_id] as isize)+num) as u32;
+        info!("id = {} src_id = {} need = {}",id,src_id,self.need[id][src_id]);
     }
     pub fn change_allocation(&mut self,id:usize,src_id:usize,num:isize){
         self.allocation[id][src_id] = ((self.allocation[id][src_id] as isize)+num) as u32;
+        info!("id = {} src_id = {} allocation = {}",id,src_id,self.allocation[id][src_id]);
     }
     pub fn detect_deadlock(&mut self)->isize{
         self.work = self.avail.clone();
         self.finish = [false;MAX_SRC_NUM];
 
+        for i in 0 .. self.finish.len(){
+            for j in 0 .. MAX_SRC_NUM{
+                info!("id = {} src_id = {} need = {} all = {}",i,j,self.need[i][j],self.allocation[i][j]);
+            }
+        }
+        for i in 0.. MAX_SRC_NUM{
+            info!("src_id = {} avail = {}",i,self.avail[i]);
+        }
         loop{
             let mut found = false; 
             for i in 0 .. self.finish.len(){
                 if self.finish[i] == false{
                     let work_change = self.work.iter().enumerate().any(|(src_id,&src)|{
+                        info!("id {} src_id {} need {} src {}",i,src_id,self.need[i][src_id],src);
                         self.need[i][src_id]>src
                     });
                     if !work_change{
+                        info!("i:{} ",i);
                         self.finish[i]=true;
                         found = true;
                         self.work.iter_mut().enumerate().for_each(|(pos,ptr)|{
-                            *ptr+=self.allocation[i][pos];
+                            info!("ptr:{} allo {}",*ptr,self.allocation[i][pos]);
+                            *ptr=(*ptr)+self.allocation[i][pos];
+                            info!("ptr:{}",*ptr);
                         });
                     }
                 }
@@ -145,6 +160,13 @@ impl ProcessControlBlockInner {
             }
         }
         0
+    }
+    /// check avail
+    pub fn check_avail(&self,sem_id:usize)->isize{
+        if self.avail[sem_id]>=1{
+            return 1;
+        }
+        return 0;
     }
 }
 

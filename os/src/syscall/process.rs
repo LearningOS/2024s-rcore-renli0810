@@ -8,7 +8,9 @@ use crate::{
     },
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
-
+use crate::mm::translated_byte_buffer;
+use crate::timer::get_time_us;
+use core::mem::size_of;
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -16,7 +18,7 @@ pub struct TimeVal {
     pub usec: usize,
 }
 
-/// Task information
+/// Task informationuse crate::timer::get_time_us;
 #[allow(dead_code)]
 pub struct TaskInfo {
     /// Task status in it's life cycle
@@ -167,7 +169,20 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
         "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
         current_task().unwrap().process.upgrade().unwrap().getpid()
     );
-    -1
+    let us: usize = get_time_us();
+    let buffers = translated_byte_buffer(current_user_token(), _ts as *const u8,size_of::<TimeVal>());
+    let res = TimeVal{
+        sec:us/1000000,
+        usec:us%1000000,
+    };
+    let mut res_ptr = &res as *const _ as *const u8;
+    for buffer in buffers{
+        unsafe{
+            core::ptr::copy_nonoverlapping(res_ptr, buffer.as_mut_ptr(), buffer.len());
+            res_ptr=res_ptr.add(buffer.len());
+        }
+    }
+    0
 }
 
 /// task_info syscall

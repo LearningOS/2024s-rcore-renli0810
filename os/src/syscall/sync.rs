@@ -185,7 +185,7 @@ pub fn sys_semaphore_up(sem_id: usize) -> isize {
     let user_inner = task_inner.res.as_ref().unwrap();
     if process_inner.get_enable() == true{
         process_inner.change_allocation(user_inner.tid, sem_id, -1);
-        // process_inner.add_avail(sem_id, 1);
+        process_inner.add_avail(sem_id, 1);
     }
    
     drop(task_inner);
@@ -219,10 +219,13 @@ pub fn sys_semaphore_down(sem_id: usize) -> isize {
             process_inner.change_need(user_inner.tid, sem_id, -1);
             return -0xDEAD;
         }
-        info!("down success");
-        process_inner.add_avail(sem_id, -1);
-        process_inner.change_allocation(user_inner.tid, sem_id, 1);
-        process_inner.change_need(user_inner.tid, sem_id, -1);
+        if process_inner.check_avail(sem_id)==1{
+            info!("down success");
+            process_inner.add_avail(sem_id, -1);
+            process_inner.change_allocation(user_inner.tid, sem_id, 1);
+            process_inner.change_need(user_inner.tid, sem_id, -1);
+        }
+        
     }
     
     let sem = Arc::clone(process_inner.semaphore_list[sem_id].as_ref().unwrap());
